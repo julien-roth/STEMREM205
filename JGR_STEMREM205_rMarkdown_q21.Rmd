@@ -1,0 +1,72 @@
+---
+title: "STEMREM205_HW2"
+author: "Julien G. Roth"
+date: "3/1/2021"
+output: html_document
+---
+
+**Loading Required Packages**
+
+```{r, tidy=TRUE}
+library(tidyverse)
+library(ggplot2)
+library(ggfortify)
+```
+
+
+### Questions 21 ###
+
+**Loading Required Data**
+
+```{r}
+info <- read.delim('C:/Users/JGR/Desktop/Bioinformatics/STEMREM_205/assignment2/GSE60450_SampleInfo.txt')
+
+df <- read.csv('C:/Users/JGR/Desktop/Bioinformatics/STEMREM_205/assignment2/GSE60450_CountsGeneSymbol.csv')
+```
+
+**Formatting**
+
+```{r}
+colnames(df) <- c("Gene", "Length", info$SampleName)
+rownames(df) <- df$Gene
+df <- df[, 2:14]
+```
+
+**Normalizing**
+
+```{r}
+df_cpm <- df[, 2:13]
+df_cpm <- cbind(df_cpm, scalefactor = rowSums(df_cpm))
+
+df_cpm_sc <- df_cpm / df_cpm$scalefactor
+df_cpm_sc <- df_cpm_sc[1:12]
+
+df_cpm_sc <- df_cpm_sc*1000000
+```
+
+**Filtering**
+
+```{r}
+df_cpm_sc_filt <-  df_cpm_sc[rowSums(df_cpm_sc > 0.5) >= 2, ] 
+df_cpm_sc_filt <-  na.omit(df_cpm_sc_filt)
+```
+
+**log2 Transform**
+
+```{r}
+df_cpm_sc_filt_log <- log2(df_cpm_sc_filt+1)
+```
+
+**PCA**
+
+```{r}
+info_form <- info[2:4]
+
+pc_plot <- prcomp(t(df_cpm_sc_filt_log))
+
+autoplot(pc_plot,
+         data = info_form,
+         colour = "CellType",
+         shape = "Status",
+         sixe = 10)
+```
