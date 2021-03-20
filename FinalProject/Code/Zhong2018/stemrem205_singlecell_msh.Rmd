@@ -1,0 +1,216 @@
+---
+title: "STEMREM205 Code for Single-Cell Analysis"
+author: "Michelle Huang"
+date: "3/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading Packages and Datasets
+
+```{r cars}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(data.table)
+library(tidyverse)
+library(ggplot2)
+library(magrittr)
+
+# Load dataset
+# change file path to current directory
+orig_data <- read.table("/Users/michellehuang/documents/GSE104276_all_pfc_2394_UMI_count_NOERCC.csv")
+data <- data.frame(orig_data)
+
+# Load neural ECM-specific genes
+# change file path to current directory
+neuralECM <- read.csv("/Users/michellehuang/documents/2020_0417_JGR_ECMGeneList.csv")
+
+# Bin into 3 categories (early, middle, late)
+# change file path to current directory
+sample_key <- fread("/Users/michellehuang/documents/sample_key.csv")
+for (sample in sample_key$Sample) {
+  colnames(data)[grep(sample, colnames(data))] %<>% paste0(sample_key[Sample == sample, Group], "_", .)
+}
+```
+
+## Initialize Seurat Objects
+
+```{r pressure, echo=FALSE}
+# Initialize the Seurat object with the raw (non-normalized data).
+data_all <- CreateSeuratObject(counts = data, 
+                               project = "stemrem205", 
+                               min.cells = 3, 
+                               min.features = 200)
+
+# Initialize the Seurat object without binning
+data_orig <- CreateSeuratObject(counts = orig_data, 
+                                project = "stemrem205", 
+                                min.cells = 3, 
+                                min.features = 200)
+
+# Initialize the Seurat object with only neural ECM genes
+data_copy <- data.frame(data)
+setDT(data_copy, keep.rownames = TRUE)
+data_nECM_merge <- data.frame(data_copy[data_copy$rn %in% neuralECM$GeneSymbol, ])
+data_nECM <- data_nECM_merge[,-1]
+rownames(data_nECM) <- data_nECM_merge[,1]
+
+nECM_Seurat <- CreateSeuratObject(counts = data_nECM, 
+                                 project = "stemrem205", 
+                                 min.cells = 3, 
+                                 min.features = 25)
+```
+
+## Preprocessing the Data
+
+```{r pressure, echo=FALSE}
+# Visualize QC metrics as a violin plot
+VlnPlot(data_all, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2)
+VlnPlot(nECM_Seurat, features = c("nFeature_RNA", "nCount_RNA"), ncol = 2, pt.size=0.3)
+
+# Visualize feature-feature relationships
+FeatureScatter(data_all, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+FeatureScatter(nECM_Seurat, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+
+# Normalizing the data
+data_all <- NormalizeData(data_all)
+data_orig <- NormalizeData(data_orig)
+nECM_Seurat <- NormalizeData(nECM_Seurat)
+```
+
+## Identifying Highly Variable Features
+
+```{r pressure, echo=FALSE}
+data_all <- FindVariableFeatures(data_all, selection.method = "vst", nfeatures = 2000)
+top10_all <- head(VariableFeatures(data_all), 10)
+plot_variable_all <- VariableFeaturePlot(data_all)
+LabelPoints(plot = plot_variable_all, points = top10_all, repel = TRUE)
+
+data_orig <- FindVariableFeatures(data_orig, selection.method = "vst", nfeatures = 2000)
+top10_orig <- head(VariableFeatures(data_orig), 10)
+plot_variable_orig <- VariableFeaturePlot(data_orig)
+LabelPoints(plot = plot_variable_orig, points = top10_orig, repel = TRUE)
+
+nECM_Seurat <- FindVariableFeatures(nECM_Seurat, selection.method = "vst", nfeatures = 100)
+top10_nECM <- head(VariableFeatures(nECM_Seurat), 10)
+plot_variable_nECM <- VariableFeaturePlot(nECM_Seurat)
+LabelPoints(plot = plot_variable_nECM, points = top10_nECM, repel = TRUE)
+```
+
+## Principal Component Analysis
+
+```{r pressure, echo=FALSE}
+data_all <- RunPCA(data_all, features = VariableFeatures(object = data_all))
+DimPlot(data_all, reduction = "pca")
+data_orig <- RunPCA(data_orig, features = VariableFeatures(object = data_orig))
+DimPlot(data_orig, reduction = "pca")
+nECM_Seurat <- RunPCA(nECM_Seurat, features = VariableFeatures(object = nECM_Seurat))
+DimPlot(nECM_Seurat, reduction = "pca")
+
+DimHeatmap(data_all, dims = 1, cells = 500, balanced = TRUE)
+DimHeatmap(nECM_Seurat, dims = 1, cells = 500, balanced = TRUE)
+
+ElbowPlot(nECM_Seurat)
+
+# Calculating PC variance
+mat <- Seurat::GetAssayData(nECM_Seurat, assay = "RNA", slot = "scale.data")
+pca <- nECM_Seurat[["pca"]]
+
+total_variance <- sum(matrixStats::rowVars(mat))
+
+eigValues = (pca@stdev)^2
+varExplained = eigValues / total_variance
+```
+
+## Clustering the Cells
+
+```{r pressure, echo=FALSE}
+data_all <- FindNeighbors(data_all, dims = 1:10)
+data_all <- FindClusters(data_all, resolution = 0.8)
+data_orig <- FindNeighbors(data_orig, dims = 1:10)
+data_orig <- FindClusters(data_orig, resolution = 0.8)
+nECM_Seurat <- FindNeighbors(nECM_Seurat, dims = 1:20)
+nECM_Seurat <- FindClusters(nECM_Seurat, resolution = 0.8)
+```
+
+## Non-linear Dimensional Reduction (UMAP)
+
+```{r pressure, echo=FALSE}
+data_all <- RunUMAP(data_all, dims = 1:10)
+DimPlot(data_all, reduction = "umap")
+data_orig <- RunUMAP(data_orig, dims = 1:10)
+DimPlot(data_orig, reduction = "umap")
+nECM_Seurat <- RunUMAP(nECM_Seurat, dims=1:20)
+DimPlot(nECM_Seurat, reduction = "umap", group.by='orig.ident')
+```
+
+## Find Differentially Expressed Features
+
+```{r pressure, echo=FALSE}
+cluster.markers <- FindAllMarkers(data_all)
+cluster.markers.orig <- FindAllMarkers(data_orig)
+cluster.markers.nECM <- FindAllMarkers(nECM_Seurat)
+```
+
+## Identify Clusters Based on Biomarker Expression
+
+```{r pressure, echo=FALSE}
+VlnPlot(data_all, features = c("PAX6", "NEUROD2", "GAD1", "PDGFRA", "AQP4", "PTPRC"))
+new.cluster.ids <- c("Excitatory Neurons",
+                     "Interneurons",
+                     "Excitatory Neurons",
+                     "Excitatory Neurons",
+                     "NPCs",
+                     "Excitatory Neurons",
+                     "Astrocytes",
+                     "Excitatory Neurons",
+                     "NPCs",
+                     "Microglia",
+                     "OPCs",
+                     "NPCs",
+                     "Excitatory Neurons")
+names(new.cluster.ids) <- levels(data_all)
+data_rename <- RenameIdents(data_all, new.cluster.ids)
+DimPlot(data_rename, reduction = "umap", label = FALSE, pt.size = 0.5) + NoLegend()
+DimPlot(data_rename, reduction = "umap", group.by = 'orig.ident', label = FALSE, pt.size = 0.5) + NoLegend()
+
+names(new.cluster.ids) <- levels(data_orig)
+data_rename_orig <- RenameIdents(data_orig, new.cluster.ids)
+DimPlot(data_rename_orig, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+DimPlot(data_rename_orig, reduction = "umap", group.by = 'orig.ident', label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+## Find Top Markers for Each Cluster
+
+```{r pressure, echo=FALSE}
+top10 <- cluster.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+top10_nECM <- cluster.markers.nECM %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
+top20_nECM <- cluster.markers.nECM %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+DoHeatmap(nECM_Seurat, features = top10_nECM$gene, group.by='orig.ident') + NoLegend()
+```
+
+## Visualize Top Neural ECM Markers for Each Cluster
+
+```{r pressure, echo=FALSE}
+top_nECM <- unique(top10_nECM$gene)
+top_nECM_20 <- unique(top20_nECM$gene)
+
+dotplot <- DotPlot(nECM_Seurat, features = top_nECM, group.by='orig.ident')
+dotplot + theme(axis.text.x = element_text(angle = 90, hjust=1))
+
+dotplot_all <- DotPlot(data_rename, features = nECM.genes)
+dotplot_all + theme(axis.text.x = element_text(angle = 90, hjust=1, size=5))
+```
+
+## Visualize Plots of Variable Genes
+
+```{r pressure, echo=FALSE}
+FeaturePlot(data_rename, features = c("NCAN","VCAN", "BCAN", "TNC", "PTPRZ1"), ncol=5)
+FeaturePlot(data_rename, features = c("SDC2","GPC2", "TNC", "COL9A1", "ADAM28"), ncol=5)
+VlnPlot(data_rename, features = c("NCAN", "VCAN", "BCAN"), group.by='orig.ident')
+```
+
