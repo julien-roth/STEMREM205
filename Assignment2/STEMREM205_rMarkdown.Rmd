@@ -1,0 +1,158 @@
+---
+title: "STEMREM205_HW2"
+author: "Julien G. Roth"
+date: "3/1/2021"
+output: html_document
+---
+
+**Loading Required Packages**
+
+```{r, tidy=TRUE}
+library(tidyverse)
+library(ggplot2)
+library(ggfortify)
+library(gplots)
+library(DESeq2)
+library(EnhancedVolcano)
+library(genefilter)
+library(pheatmap)
+```
+
+
+### Questions 19 - 30 ###
+
+**Loading Required Data**
+
+```{r}
+info <- read.delim('C:/Users/JGR/Desktop/Bioinformatics/STEMREM_205/assignment2/GSE60450_SampleInfo.txt')
+
+df <- read.csv('C:/Users/JGR/Desktop/Bioinformatics/STEMREM_205/assignment2/GSE60450_CountsGeneSymbol.csv')
+```
+
+**Formatting**
+
+```{r}
+colnames(df) <- c("Gene", "Length", info$SampleName)
+rownames(df) <- df$Gene
+df <- df[, 2:14]
+```
+
+**Normalizing**
+
+```{r}
+df_cpm <- df[, 2:13]
+df_cpm <- cbind(df_cpm, scalefactor = rowSums(df_cpm))
+
+df_cpm_sc <- df_cpm / df_cpm$scalefactor
+df_cpm_sc <- df_cpm_sc[1:12]
+
+df_cpm_sc <- df_cpm_sc*1000000
+```
+
+**Filtering**
+
+```{r}
+df_cpm_sc_filt <-  df_cpm_sc[rowSums(df_cpm_sc > 0.5) >= 2, ] 
+df_cpm_sc_filt <-  na.omit(df_cpm_sc_filt)
+```
+
+**log2 Transform**
+
+```{r}
+df_cpm_sc_filt_log <- log2(df_cpm_sc_filt+1)
+```
+
+**Boxplot**
+
+```{r}
+boxplot(df_cpm_sc_filt_log, xlab="", ylab="Log2 counts per million", las=2)
+```
+
+**PCA**
+
+```{r}
+info_form <- info[2:4]
+
+pc_plot <- prcomp(t(df_cpm_sc_filt_log))
+
+autoplot(pc_plot,
+         data = info_form,
+         colour = "CellType",
+         shape = "Status",
+         sixe = 10)
+```
+
+**Luminal, Pregnant Cells**
+
+```{r}
+lumpreg <- df_cpm_sc_filt_log[c("MCL1.LC", "MCL1.LD")]
+
+ggplot(lumpreg, aes(x=MCL1.LC, y=MCL1.LD)) + 
+  geom_point()
+```
+
+**Luminal, Pregnant Cells**
+
+```{r}
+lumpreg <- df_cpm_sc_filt_log[c("MCL1.LC", "MCL1.LD")]
+
+ggplot(lumpreg, aes(x=MCL1.LC, y=MCL1.LD)) + 
+  geom_point()
+
+ggplot(lumpreg, aes(x=MCL1.LC, y=MCL1.LD)) + 
+  geom_point(alpha = 0.05)
+
+cor.test(lumpreg$MCL1.LC, lumpreg$MCL1.LD)
+```
+
+**Heatmap**
+
+```{r}
+df_lumpreg_var <- apply(lumpreg, 1, var)
+df_lumpreg_var_high <- order(df_lumpreg_var, decreasing=TRUE)[1:5000]
+df_heat <- lumpreg[df_lumpreg_var_high,]
+mat_heat <- as.matrix(df_heat)
+
+heatmap.2(mat_heat,
+          scale="row")
+```
+
+**DEseq2**
+
+```{r}
+df_deseq <- df[ , 2:13]
+
+all(info_form$SampleName == colnames(df_deseq))
+
+design <- as.formula(~CellType)
+
+ddsObj <- DESeqDataSetFromMatrix(countData = df_deseq,
+                              colData = info_form,
+                              design = design)
+
+dds <- DESeq(ddsObj, betaPrior=FALSE)
+
+res <- results(dds)
+
+res_shr <- lfcShrink(dds,
+    contrast = c('CellType','basal','luminal'), res=res, type = 'normal')
+```
+
+**Volcano**
+
+```{r}
+EnhancedVolcano(res_shr,
+    lab = rownames(res_shr),
+    x = 'log2FoldChange',
+    y = 'pvalue')
+```
+
+**Heatmap**
+
+```{r}
+topVarGenes <- head(order(rowVars(assay(dds)), decreasing = TRUE), 20)
+mat  <- assay(dds)[topVarGenes, ]
+mat  <- mat - rowMeans(mat)
+anno <- as.data.frame(colData(dds)[, c("CellType","Status")])
+pheatmap(mat, annotation_col = anno)
+```
