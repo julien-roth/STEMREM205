@@ -2,6 +2,10 @@
 
 Repository for code related to STEMREM205, Winter 2021.
 
-STEMREM205_rMarkdown_q21 contains code related to Question 21 in Homework Assigment 2. 
+** Assignment2 
+	*STEMREM205_rMarkdown* contains all the code used for answering questions in Assignment 2.
+	*STEMREM205_rMarkdown_q21* contains code related to Question 21. 
 
-STEMREM205_FinalProject contains code and raw data related to the course project.
+** FinalProject 
+	*Code* contains code (divided into constituent parts) for the analyses and figures.
+	*RawData* contains data relevant to the project.
