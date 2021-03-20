@@ -1,0 +1,153 @@
+---
+title: "DESeq2_Kang_DI_EA"
+output: html_document
+---
+
+```{r setup, echo=FALSE, results="hide"}
+knitr::opts_chunk$set(tidy=FALSE, cache=TRUE,
+                      dev="png",
+                      message=FALSE, error=FALSE, warning=TRUE)
+library(BiocManager)
+library(DESeq2)
+library(EnhancedVolcano)
+```
+
+
+```{r quickStart, eval=FALSE}
+cts <- read.csv("gcount_matrix_Emb_adult.csv", header=TRUE, sep=",", row.names = "ID_REF")
+colData <- read.csv("coldata_Emb_adult.csv", header=TRUE, sep=",")
+attach(cts)
+attach (colData)
+dds <- DESeqDataSetFromMatrix(countData = cts,
+                             colData,
+                             design= ~ Region + Age)
+dds <- DESeq(dds)
+resultsNames(dds) # lists the coefficients
+res <- results(dds, name="Age_Embryonic_vs_Adult")
+#or to shrink log fold changes association with condition:
+resLFC <- lfcShrink(dds, coef="Age_Embryonic_vs_Adult", type="apeglm")
+```
+
+
+```{r}
+## ----MA------------------------------------------------------------------
+plotMA(res, ylim=c(-2,2))
+
+## ----shrunkMA------------------------------------------------------------
+plotMA(resLFC, ylim=c(-2,2))
+
+## ----plotCounts----------------------------------------------------------
+plotCounts(dds, gene=which.min(res$padj), intgroup="Age")
+
+```
+
+
+```{r}
+## ----export, eval=FALSE--------------------------------------------------
+write.csv(as.data.frame(res),
+          file="Age_EmbryonicVSAdult_results.csv")
+
+```
+
+
+```{r}
+
+## ----rlogAndVST----------------------------------------------------------
+vsd <- vst(dds, blind=FALSE)
+rld <- rlog(dds, blind=FALSE)
+head(assay(vsd), 3)
+
+## ----meansd--------------------------------------------------------------
+# this gives log2(n + 1)
+ntd <- normTransform(dds)
+library("vsn")
+meanSdPlot(assay(ntd))
+meanSdPlot(assay(vsd))
+meanSdPlot(assay(rld))
+```
+
+
+```{r}
+## ----heatmap-------------------------------------------------------------
+library("pheatmap")
+select <- order(rowMeans(counts(dds,normalized=TRUE)),
+                decreasing=TRUE)[1:20]
+df <- as.data.frame(colData(dds)[,c("Age","Region")])
+pheatmap(assay(ntd)[select,], cluster_rows=FALSE, show_rownames=TRUE,
+         cluster_cols=FALSE, annotation_col=df)
+pheatmap(assay(vsd)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+pheatmap(assay(rld)[select,], cluster_rows=FALSE, show_rownames=FALSE,
+         cluster_cols=FALSE, annotation_col=df)
+```
+
+
+```{r}
+## ----sampleClust---------------------------------------------------------
+sampleDists <- dist(t(assay(vsd)))
+
+## ----figHeatmapSamples, fig.height=4, fig.width=6------------------------
+library("RColorBrewer")
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-")
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+pheatmap(sampleDistMatrix,
+         clustering_distance_rows=sampleDists, 
+         clustering_distance_cols=sampleDists,
+         col=colors)
+```
+
+
+```{r}
+
+## ----figPCA--------------------------------------------------------------
+plotPCA(vsd, intgroup=c("Age", "Region"))
+
+## ----figPCA2-------------------------------------------------------------
+pcaData <- plotPCA(vsd, intgroup=c("Age", "Region"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+ggplot(pcaData, aes(PC1, PC2, color=Age)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  coord_fixed()
+```
+
+
+```{r}
+    keyvals <- ifelse(
+    res$log2FoldChange < -1.5, 'lightblue',
+      ifelse(res$log2FoldChange > 1.5, 'indianred2',
+        'gray75'))
+    keyvals[is.na(keyvals)] <- 'gray75'
+    names(keyvals)[keyvals == 'indianred2'] <- 'up'
+    names(keyvals)[keyvals == 'gray75'] <- 'unchanged'
+    names(keyvals)[keyvals == 'lightblue'] <- 'down'
+    
+EnhancedVolcano(res,
+    lab = rownames(res),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    axisLabSize = 12,
+    selectLab = c('CNTN1','LUM','TNR','GPC3','GPC4','HMMR','GPC5','GPC6','MMP2','COL3A1','LAMA1','BCAN','SDC1','HAS2','MBP','ADAM23','VCAN','LAMC1','NCAN'),
+    title = 'Embryonic vs Adult',
+    subtitle = "Kang et al., Nature, 2011",
+    titleLabSize = 12,
+    subtitleLabSize = 10,
+    captionLabSize = 10,
+    pCutoff = 10e-16,
+    FCcutoff = 1.5,
+    colCustom = keyvals,
+    legendPosition = 'right',
+    legendLabSize = 10,
+    legendIconSize = 2.0,
+    drawConnectors = TRUE,
+    widthConnectors = 0.1,
+    colConnectors = 'black',
+    gridlines.major = TRUE,
+    gridlines.minor = FALSE,
+    border = 'partial',
+    borderWidth = 0.5,
+    borderColour = 'black')
+```

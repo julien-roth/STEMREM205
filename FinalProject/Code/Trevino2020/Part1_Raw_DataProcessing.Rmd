@@ -1,0 +1,196 @@
+---
+title: \vspace{-1cm} Part1_Raw_DataProcessing \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/11/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Loading Packages and Data #
+
+**The following script will output a formatted dataframe for use in later analyses.**
+
+The output is the dataframe: **'data_n_x_m'**.  
+` `  
+` ` 
+**Loading Required Packages**
+
+```{r, tidy=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(matrixStats)
+library(biomaRt)
+library(ggplot2)
+library(viridis)
+library(RColorBrewer)
+library(ggfortify)
+library(pheatmap)
+library(gplots)
+library(patchwork)
+library(DESeq2)
+library(EnhancedVolcano)
+library(genefilter)
+```
+
+**Loading Data**
+
+```{r, tidy=TRUE, message=FALSE, warning=FALSE}
+directory <- "C:/Users/JGR/Desktop/Bioinformatics/"
+manuscript  <- "Trevino-Pasca_2020/Data/"
+file_raw <- "raw.abundance.kalliso.tsv"
+
+data <- read.table(file = str_c(directory, manuscript, file_raw), sep = '\t', header = TRUE, row.names = NULL)
+names(data)[1] <- "Transcript"
+```
+
+**Characterizing Data**
+
+```{r, tidy=TRUE}
+dim(data)
+```
+
+```{r, tidy=TRUE}
+colnames(data)
+```
+
+The imported data file contains 49,315 rows and 55 columns. The rows are genes, columns are sample identifications: experiment, cell type (immunopanning / FACS selection criteria), differentiation day, cell line, and patterning regime.
+
+
+\pagebreak
+
+
+# Formatting Data #
+
+**Formatting Gene IDs**
+
+'Transcript' are refSeq Accession numbers from the refGene genome. biomaRt will therefore be used to convert refSeq IDs to HGNC IDs.
+
+**Importantly**, there are several genes with isoforms that are relevant to neural ECM (ie VCANv1, VCANv2, ect...). The HGNC IDs do not include isoform IDs, so the 'Isoform' column facilaites later conversion into an indentification that includes the isoform (this will have to be done manually as no datasets include isoforms in their gene IDs).
+
+```{r, tidy=TRUE, results='hide', message=FALSE, warning=FALSE}
+ensembl  <-  useEnsembl(biomart = "ensembl", dataset = "hsapiens_gene_ensembl", mirror = "useast")
+
+gene <-  data$Transcript
+
+gene_name <-  getBM(filters="refseq_mrna", 
+                  attributes = c("refseq_mrna", "hgnc_symbol"), 
+                  values = gene, 
+                  mart = ensembl, 
+                  uniqueRows = FALSE)
+
+colnames(gene_name) <-  c("Transcript", "Symbol")
+
+gene_name$Isoform <- paste(gene_name$Symbol, gene_name$Transcript, sep = "_")
+
+data_label <-  merge.data.frame(gene_name, data, by = "Transcript")
+```
+
+There appear to be genes with complete replicates (all expression values are equal across all samples). These should be removed. Given that the 'Isoform' corresponds to both the gene name (HGNC) and the transcript ID (refseq), the following line filters by unique 'Isoform'.
+
+```{r, tidy=TRUE}
+data_unique <-  data_label %>% 
+  distinct(Isoform, .keep_all = TRUE)
+```
+
+```{r, tidy=TRUE}
+data_unique <- data_unique[!(data_unique$Symbol == ""), ]
+```
+
+
+\pagebreak
+
+
+**Formatting Experiments**
+
+'x' refers to hiPSC differentiations performed within Trevino, Alexandro E. *et al.* (2020). 'sloan' refers to hiPSC differentiations performed within Sloan, S. A. *et al.* (2017).
+
+Given the abundance of data available within the 'x' dataset, the remainder of this analysis will only focus on those samples. 
+
+```{r, tidy=TRUE}
+data_x_unique <-  data_unique[,1:35]
+
+data_x_tall <-  gather(data_x_unique, 
+                     Sample, Expression, 
+                     X165_neuronal_114_2242.1_hCS:X290_glial_125_8858.1_hSS)
+
+data_x_tall <-  separate(data_x_tall, 
+                       Sample, 
+                       c("Experiment", "Cell_Type", "Day", "Cell_Line", "Patterning"), "_")
+```
+
+
+\pagebreak
+
+
+**Creating a dataframe with mean expression values**
+
+```{r, tidy=TRUE}
+data_x_mean <- data_x_tall[ , c(7, 8, 5, 6, 2, 3, 9)]
+```
+
+There are some examples of expression values where the same 'Comp_ID' has multiple recorded values with the same 'Patterning', 'Cell Type', and 'Day'. These replicates are caused by there being multiple different hiPSC 'Cell Lines'. Here is an example of such an overlap (for the first isoform of versican).
+
+```{r, tidy=TRUE}
+data_x_mean %>% 
+  filter(Isoform == "VCAN_NM_004385") %>% 
+  tail(10)
+```
+
+To limit the number of variables considered within the following analysis, 'Expression' from the same ['Patterning', 'Cell Type', and 'Day'] regime (ie different hiPSC 'Cell_Lines') are averaged. The resultant code displays how many values replicates were averaged. 
+
+```{r, tidy=TRUE}
+data_x_mean_rep <- data_x_mean %>% 
+  mutate(Rep_ID = paste(Patterning, Cell_Type, Day, Isoform, sep = "_"))
+
+x_rep_expression <- data_x_mean_rep %>% 
+  group_by(Rep_ID) %>% 
+  summarize('Mean_Expression' = mean(Expression))
+
+x_rep_count <- data_x_mean_rep %>% 
+  group_by(Rep_ID) %>% 
+  summarize('n' = length(Expression))
+
+x_rep <- inner_join(x_rep_expression, x_rep_count, by = "Rep_ID")
+
+nrow(filter(x_rep, x_rep$n > 1))
+```
+
+There were 390080 examples of expression data (for a given transcript) that was duplicated due to different hiPSC 'Cell Lines' being included.
+
+```{r, tidy=TRUE}
+data_x_mean_comp <- inner_join(data_x_mean_rep, x_rep, by = "Rep_ID")
+```
+
+The resulting dataframe now contains mean expression values for each replicate, however the replicate itsels remains in the dataframe. The following code removes any replicate rows (based on the 'Rep_ID' column value).
+
+```{r, tidy=TRUE}
+data_x_mean_comp_unique <- data_x_mean_comp %>% 
+  distinct(Rep_ID, .keep_all = TRUE)
+
+data_x_mean_format <- data_x_mean_comp_unique[ , c(2:6, 9:10)]
+
+data_x_m <- data_x_mean_format
+
+head(data_x_m, 5)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Export the variables which are requried for downstream steps.**
+
+```{r, tidy=TRUE}
+
+variables <- "Trevino-Pasca_2020/Variables/"
+
+write.table(data_x_m, str_c(directory, variables, "data_x_m.csv"), sep = ',', row.names = FALSE)
+```
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(data_label, data_unique, data_x_mean, data_x_mean_comp, data_x_mean_comp_unique, data_x_mean_format, data_x_mean_rep, data_x_tall, data_x_unique, gene_name, gene, x_rep, x_rep_count, x_rep_expression)
+```

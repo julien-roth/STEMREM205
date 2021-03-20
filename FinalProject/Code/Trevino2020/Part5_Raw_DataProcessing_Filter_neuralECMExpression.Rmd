@@ -1,0 +1,59 @@
+---
+title: \vspace{-1cm} Part6_Raw_DataProcessing_DESEQformat \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/14/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Formatting Raw Data to Run in DESEQ2 #
+
+The data is rearragned to create a read counts table and a metadata table.
+
+Input: **data_x_m_f_neuralECM**
+
+Output: **data_x_m_f_neuralECM_log_f**
+
+Key: x (Trevino study), m (mean expression), f (timepoint filtered), neuralECM (neural ECM gene filtered), 
+
+```{r, tidy=TRUE, message=FALSE, warning=FALSE}
+
+data_x_m_f_neuralECM_log <- data_x_m_f_neuralECM
+
+data_x_m_f_neuralECM_log[data_x_m_f_neuralECM_log == 0] <- -999
+
+data_x_m_f_neuralECM_log <- data_x_m_f_neuralECM_log %>% 
+  mutate(Transformed = log(Mean_Expression, base = 2))
+
+data_x_m_f_neuralECM_log_f <- data_x_m_f_neuralECM_log[!is.na(data_x_m_f_neuralECM_log$Transformed),]
+```
+
+```{r, tidy=TRUE}
+
+nrow(data_x_m_f_neuralECM_log_f)
+```
+
+```{r, tidy=TRUE}
+
+head(data_x_m_f_neuralECM_log_f, 5)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Export the variables which are requried for downstream steps.**
+
+```{r, tidy=TRUE}
+
+write.table(data_x_m_f_neuralECM_log_f, str_c(directory, variables, "data_x_m_f_neuralECM_log_f.csv"), sep = ',', row.names = FALSE)
+```
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(data_x_m_f_neuralECM_log)
+```

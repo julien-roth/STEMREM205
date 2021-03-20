@@ -1,0 +1,111 @@
+---
+title: \vspace{-1cm} Part3_A_Raw_DataProcessing_Aggregate_Time \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/14/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Filtering Data by Time # 
+
+**The following script attempts to reduce some of the dimensionality of the dataset. This is accomplished by aggregating the data into one of the following categories: Early Whole, Intermediate Neuronal, Intermediate Glial, Late Neuronal, Late Glial. Unfortunately glial purification was only performed once in hSS patterning.**   
+
+Some timepoints are excluded if both neuronal/glial cells were not sampled.  
+
+The output is the dataframe: **'data_x_m_f'**. The input file, 'data_x_m' still has all timepoints for each condition.**  
+
+
+```{r, tidy=TRUE}
+
+data_x_m_filter_hCS_w <- data_x_m %>% 
+  filter(Patterning == "hCS") %>% 
+  filter(Cell_Type == "whole") %>% 
+  mutate(Maturity = "early")
+
+data_x_m_filter_hCS_n <- data_x_m %>% 
+  filter(Patterning == "hCS") %>% 
+  filter(Cell_Type == "neuronal") %>% 
+  filter(Day == 140 | Day == 179 | Day == 206 | Day == 220 | Day == 588 | Day == 595) %>% 
+  mutate(Maturity = case_when(Day == 140 ~ "intermediate",  Day == 179 ~ "intermediate", Day == 206 ~ "intermediate", Day == 220 ~ "intermediate", 
+                              Day == 588 ~ "late", Day == 595 ~ "late"))
+
+data_x_m_filter_hCS_g <- data_x_m %>% 
+  filter(Patterning == "hCS") %>% 
+  filter(Cell_Type == "glial") %>% 
+  filter(Day == 140 | Day == 179 | Day == 206 | Day == 220 | Day == 588 | Day == 595) %>% 
+  mutate(Maturity = case_when(Day == 140 ~ "intermediate",  Day == 179 ~ "intermediate", Day == 206 ~ "intermediate", Day == 220 ~ "intermediate", 
+                              Day == 588 ~ "late", Day == 595 ~ "late"))
+
+data_x_m_filter_hCS <- rbind(data_x_m_filter_hCS_w, data_x_m_filter_hCS_n, data_x_m_filter_hCS_g)
+
+data_x_m_filter_hCS <- data_x_m_filter_hCS %>% 
+  mutate(Cell_Category = paste(Maturity, Cell_Type, sep = "-"))
+
+head(data_x_m_filter_hCS, 5)
+```
+
+
+\pagebreak
+
+
+```{r, tidy=TRUE}
+
+data_x_m_filter_hSS_w <- data_x_m %>% 
+  filter(Patterning == "hSS") %>% 
+  filter(Cell_Type == "whole") %>% 
+  mutate(Maturity = "early")
+
+data_x_m_filter_hSS_n <- data_x_m %>% 
+  filter(Patterning == "hSS") %>% 
+  filter(Cell_Type == "neuronal") %>% 
+  filter(Day == 125 | Day == 588) %>% 
+  mutate(Maturity = case_when(Day == 125 ~ "intermediate", Day == 588 ~ "late"))
+
+data_x_m_filter_hSS_g <- data_x_m %>% 
+  filter(Patterning == "hSS") %>% 
+  filter(Cell_Type == "glial") %>% 
+  filter(Day == 125) %>% 
+  mutate(Maturity = "intermediate")
+
+data_x_m_filter_hSS <- rbind(data_x_m_filter_hSS_w, data_x_m_filter_hSS_n, data_x_m_filter_hSS_g)
+
+data_x_m_filter_hSS <- data_x_m_filter_hSS %>% 
+  mutate(Cell_Category = paste(Maturity, Cell_Type, sep = "-"))
+
+head(data_x_m_filter_hSS, 5)
+```
+
+
+\pagebreak
+
+
+**Compiling the resultant time-filtered dataframes.**
+
+```{r, tidy=TRUE}
+
+data_x_m_filter <- rbind(data_x_m_filter_hCS, data_x_m_filter_hSS)
+
+data_x_m_f <- data_x_m_filter
+
+nrow(data_x_m_f)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Export the variables which are requried for downstream steps.**
+
+```{r, tidy=TRUE}
+
+write.table(data_x_m_f, str_c(directory, variables, "data_x_m_f.csv"), sep = ',', row.names = FALSE)
+```
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(data_x_m_filter, data_x_m_filter_hCS, data_x_m_filter_hCS_g, data_x_m_filter_hCS_n, data_x_m_filter_hCS_w, data_x_m_filter_hSS, data_x_m_filter_hSS_g, data_x_m_filter_hSS_n, data_x_m_filter_hSS_w)
+```

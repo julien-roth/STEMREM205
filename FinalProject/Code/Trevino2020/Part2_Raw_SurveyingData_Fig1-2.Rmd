@@ -1,0 +1,167 @@
+---
+title: \vspace{-1cm} Part2_Raw_SurveyingData_Fig1-2 \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/11/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Surveying the Data #
+
+**The following script will save two figures. The first figure is a histogram which represents the collection of each sample from Trevino et al. as a function of the 'Patterning', 'Day', and 'Cell Type'. The second figure is a PCA plot which takes every gene proflied in the normlaized data set into account.**
+
+To faciliate saving files to a different directory/folder, the following lines of code can be edited.
+
+```{r, tidy=TRUE, message=FALSE, warning=FALSE}
+
+folder_fig_r <- "Trevino-Pasca_2020/Figures/Raw"
+```
+
+
+```{r, tidy=TRUE}
+
+vird_3 <- colorRampPalette(c("#F7EC37", "#7CC255","#1D908D","#38598C","#431A54"))(n = 3)
+plasa_3 <- colorRampPalette(c("#FDE846", "#F89F3A","#CB4878","#723895","#2B2F7C"))(n = 3)
+
+plasa_2 <- colorRampPalette(c("#FDE846", "#F89F3A","#CB4878","#723895","#2B2F7C"))(n = 2)
+
+vird_15 <- colorRampPalette(c("#F7EC37", "#7CC255","#1D908D","#38598C","#431A54"))(n = 15)
+plasa_15 <- colorRampPalette(c("#FDE846", "#F89F3A","#CB4878","#723895","#2B2F7C"))(n = 15)
+```
+
+**Understanding how the data has been sampled with respect to days of differentiation**
+
+Although the dataframe from the last set of manipulations contains a single, average expression value for each gene across every sequenced sample, the timepoints appear to be somewhat arbitrary. Before moving forward, it would be helpful to understand how the timepoints are distributed. 
+
+```{r, tidy=TRUE}
+
+figure_one <- data_x_m
+
+figure_one <- figure_one %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Day = fct_relevel(Day, 
+                           "25", "41", "46", "59", "107", "114", "125", 
+                           "140", "179", "206", "220", "394", "532", 
+                           "588", "595")) 
+```
+
+```{r, fig.width=12, fig.height=6}
+
+figure_one %>% 
+  ggplot(aes(x=Day, fill=Cell_Type)) + 
+  geom_bar(position = "stack", color = "black", alpha = 0.85) + 
+  facet_grid(~Patterning) + 
+  theme_bw() + 
+  theme(panel.grid.major.x = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+    labs(x = "Day", y = "Number of Unique Reads", 
+       title = expression("Figure 1.) Distribution of Samples across Differentiation Paradigm from Trevino"~italic("et al.")~"(2020)"), 
+       fill = "Cell Type")
+
+ggsave('figure_1_raw_samples_barplot.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=6, 
+       units = "in", 
+       scale = 1)
+```
+
+
+\pagebreak
+
+
+**Understanding how the data clusters when all genes are included**
+
+```{r, tidy=TRUE, fig.width=12, fig.height=18}
+
+figure_two <- data_x_m
+
+figure_two <- figure_two %>% 
+  mutate(Comp = paste(Patterning, Cell_Type, Day, sep = "_"))
+
+figure_two <- figure_two %>% 
+  subset(select = c(Isoform, Mean_Expression, Comp))
+
+figure_two_spread <- figure_two %>% 
+  spread(Comp, Mean_Expression)
+
+figure_two_format <- data.frame(figure_two_spread[ ,-1], row.names=figure_two_spread[ ,1])
+
+figure_two_pca <- prcomp(t(figure_two_format))
+
+figure_two_pca_perc <-  round(100*figure_two_pca$sdev^2/sum(figure_two_pca$sdev^2),1)
+
+figure_two_pca_df <- data.frame(PC1 = figure_two_pca$x[ ,1], 
+                                    PC2 = figure_two_pca$x[ ,2], 
+                                    Sample = colnames(figure_two_format))
+
+figure_two_pca_df <- figure_two_pca_df %>% 
+  mutate(temp = figure_two_pca_df$Sample) %>% 
+  separate(temp, c("Patterning", "Cell_Type", "Day"), "_") %>% 
+  subset(select = c(PC1, PC2, Patterning, Cell_Type, Day))
+
+figure_two_pca_df <- figure_two_pca_df %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Day = fct_relevel(Day, "25", "41", "46", "59", "107", "114", "125", "140", "179", "206", "220", "394", "532", "588", "595"))
+```
+
+```{r, tidy=TRUE, fig.width=12, fig.height=18}
+
+figure_two_A <- ggplot(figure_two_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Day), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_15)) +
+  labs(x = paste0("PC1(",figure_two_pca_perc[1],")"), y = paste0("PC2(",figure_two_pca_perc[2],")"))
+
+figure_two_B <- ggplot(figure_two_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Cell_Type, shape = Cell_Type), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_two_pca_perc[1],")"), y = paste0("PC2(",figure_two_pca_perc[2],")"), fill = "Cell Type", shape = "Cell Type")
+
+figure_two_C <- ggplot(figure_two_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Day), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_15)) +
+  labs(x = paste0("PC1(",figure_two_pca_perc[1],")"), y = paste0("PC2(",figure_two_pca_perc[2],")"))
+
+figure_two_D <- ggplot(figure_two_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Patterning, shape = Patterning), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +   
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_2)) +
+  labs(x = paste0("PC1(",figure_two_pca_perc[1],")"), y = paste0("PC2(",figure_two_pca_perc[2],")"), fill = "Patterning", shape = "Patterning")
+
+figure_two_A / figure_two_B / figure_two_C / figure_two_D + plot_annotation(title = "Figure 2.) Principle Component Analysis of Samples", tag_levels = "A", tag_prefix = "[", tag_suffix = "]")
+
+ggsave('figure_2_raw_allgenes_pca.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=18, 
+       units = "in", 
+       scale = 1)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(figure_one, figure_two, figure_two_A, figure_two_B, figure_two_C, figure_two_D, figure_two_format, figure_two_pca, figure_two_pca_df, figure_two_pca_perc, figure_two_spread)
+
+rm(vird_3, vird_15, plasa_2, plasa_3, plasa_15)
+```

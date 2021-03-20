@@ -1,0 +1,332 @@
+---
+title: \vspace{-1cm} Part4_Raw_SurveyingData_postfiltering_Fig3-4-5-6 \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/14/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Surveying the Data Post-Filtering by Time and Genes of Interest #
+
+**The following script will output and save four figures. The first figure is a histogram which represents the collection of each sample following aggregation into three discrete timepoints (early, intermediate, late). The second figure is a PCA plot which takes every gene proflied in the raw data set into account following timepoint aggregation. The third figure is another PCA plot which only includes *ECM genes* following timepoint aggregation. The fourth figure is PCA plot which only includes *neural ECM genes* following timepoint aggregation.**
+
+**Plotted Dataframes**
+data_n_x_m : Mean Expression dataframe **[Figure 1, Figure 2]**
+data_n_x_m_f : Mean Expression dataframe aggregated into discrete timepoints **[Figure 3, Figure 4]**
+data_n_x_m_f_ECM : Aggregated into discrete timepoints and filtered for ECM genes **[Figure 5]**
+data_n_x_m_f_neuralECM : Aggregated into discrete timepoints and filtered for *neural* ECM genes  **[Figure 6]**
+
+**Non-plotted Dataframes**
+data_n_x_m_ECM : Filtered for ECM genes
+data_n_x_m_neuralECM : Filtered for *neural* ECM genes  
+
+
+\pagebreak
+
+```{r, tidy=TRUE}
+
+vird_3 <- colorRampPalette(c("#F7EC37", "#7CC255","#1D908D","#38598C","#431A54"))(n = 3)
+plasa_3 <- colorRampPalette(c("#FDE846", "#F89F3A","#CB4878","#723895","#2B2F7C"))(n = 3)
+
+plasa_2 <- colorRampPalette(c("#FDE846", "#F89F3A","#CB4878","#723895","#2B2F7C"))(n = 2)
+```
+
+**Understanding how the data has been sampled following aggregation by timepoint.**
+
+```{r, tidy=TRUE}
+
+figure_three <- data_x_m_f
+
+figure_three <- figure_three %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Maturity = fct_relevel(Maturity, "early", "intermediate", "late")) 
+```
+
+```{r, tidy=TRUE, fig.width=12, fig.height=6}
+figure_three %>% ggplot(aes(x=Maturity, fill=Cell_Type)) + 
+  geom_bar(position = "stack", color = "black", alpha = 0.85) + 
+  facet_grid(~Patterning) + 
+  theme_bw() + 
+  theme(panel.grid.major.x = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = "Maturity", y = "Number of Unique Reads", 
+       title = expression("Figure 3.) Distribution of Samples across Differentiation Paradigm from Trevino"~italic("et al.")~"(2020)"), 
+       fill = "Cell Type")
+
+ggsave('figure_3_raw_samples_barplot_timeaggregation.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=6, 
+       units = "in", 
+       scale = 1)
+```
+
+There are approximately 50,000 transcripts per sample.
+
+
+\pagebreak
+
+
+**Understanding how the data clusters when all genes are included Plotting PCA following aggregation by timepoint.**
+
+```{r, tidy=TRUE}
+
+figure_four <- data_x_m_f
+
+figure_four <- figure_four %>% 
+  mutate(Comp = paste(Patterning, Cell_Type, Day, Maturity, sep = "_"))
+
+figure_four <- figure_four %>% 
+  subset(select = c(Isoform, Mean_Expression, Comp))
+
+figure_four_spread <- figure_four %>% 
+  spread(Comp, Mean_Expression)
+
+figure_four_format <- data.frame(figure_four_spread[ ,-1], row.names=figure_four_spread[ ,1])
+
+figure_four_pca <- prcomp(t(figure_four_format))
+
+figure_four_pca_perc <-  round(100*figure_four_pca$sdev^2/sum(figure_four_pca$sdev^2),1)
+
+figure_four_pca_df <- data.frame(PC1 = figure_four_pca$x[ ,1], 
+                                    PC2 = figure_four_pca$x[ ,2], 
+                                    Sample = colnames(figure_four_format))
+
+figure_four_pca_df <- figure_four_pca_df %>% 
+  mutate(temp = figure_four_pca_df$Sample) %>% 
+  separate(temp, c("Patterning", "Cell_Type", "Day", "Maturity"), "_") %>% 
+  subset(select = c(PC1, PC2, Patterning, Cell_Type, Day, Maturity))
+
+figure_four_pca_df <- figure_four_pca_df %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Maturity = fct_relevel(Maturity, "early", "intermediate", "late"))
+```
+
+```{r, tidy=TRUE, fig.width=12, fig.height=18}
+
+figure_four_A <- ggplot(figure_four_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_four_pca_perc[1],")"), y = paste0("PC2(",figure_four_pca_perc[2],")"))
+
+figure_four_B <- ggplot(figure_four_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Cell_Type, shape = Cell_Type), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_four_pca_perc[1],")"), y = paste0("PC2(",figure_four_pca_perc[2],")"), fill = "Cell Type", shape = "Cell Type")
+
+figure_four_C <- ggplot(figure_four_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_3)) +
+  labs(x = paste0("PC1(",figure_four_pca_perc[1],")"), y = paste0("PC2(",figure_four_pca_perc[2],")"))
+
+figure_four_D <- ggplot(figure_four_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Patterning, shape = Patterning), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +  
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_2)) +
+  labs(x = paste0("PC1(",figure_four_pca_perc[1],")"), y = paste0("PC2(",figure_four_pca_perc[2],")"), fill = "Patterning", shape = "Patterning")
+
+figure_four_A / figure_four_B / figure_four_C / figure_four_D + plot_annotation(title = "Figure 4.) Principle Component Analysis of Samples following Timepoint Filtering", tag_levels = "A", tag_prefix = "[", tag_suffix = "]")
+
+ggsave('figure_4_raw_allgenes_pca_timeaggregation.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=18, 
+       units = "in", 
+       scale = 1)
+```
+
+
+\pagebreak
+
+
+**Understanding how the data clusters when *all ECM genes* are included Plotting PCA following aggregation by timepoint.**
+
+```{r, tidy=TRUE}
+
+figure_five <- data_x_m_f_ECM
+
+figure_five <- figure_five %>% 
+  mutate(Comp = paste(Patterning, Cell_Type, Day, Maturity, sep = "_"))
+
+figure_five <- figure_five %>% 
+  subset(select = c(Isoform, Mean_Expression, Comp))
+
+figure_five_spread <- figure_five %>% 
+  spread(Comp, Mean_Expression)
+
+figure_five_format <- data.frame(figure_five_spread[ ,-1], row.names=figure_five_spread[ ,1])
+
+figure_five_pca <- prcomp(t(figure_five_format))
+
+figure_five_pca_perc <-  round(100*figure_five_pca$sdev^2/sum(figure_five_pca$sdev^2),1)
+
+figure_five_pca_df <- data.frame(PC1 = figure_five_pca$x[ ,1], 
+                                    PC2 = figure_five_pca$x[ ,2], 
+                                    Sample = colnames(figure_five_format))
+
+figure_five_pca_df <- figure_five_pca_df %>% 
+  mutate(temp = figure_five_pca_df$Sample) %>% 
+  separate(temp, c("Patterning", "Cell_Type", "Day", "Maturity"), "_") %>% 
+  subset(select = c(PC1, PC2, Patterning, Cell_Type, Day, Maturity))
+
+figure_five_pca_df <- figure_five_pca_df %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Maturity = fct_relevel(Maturity, "early", "intermediate", "late"))
+```
+
+```{r, tidy=TRUE, fig.width=12, fig.height=18}
+
+figure_five_A <- ggplot(figure_five_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_five_pca_perc[1],")"), y = paste0("PC2(",figure_five_pca_perc[2],")"))
+
+figure_five_B <- ggplot(figure_five_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Cell_Type, shape = Cell_Type), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_five_pca_perc[1],")"), y = paste0("PC2(",figure_five_pca_perc[2],")"), fill = "Cell Type", shape = "Cell Type")
+
+figure_five_C <- ggplot(figure_five_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_3)) +
+  labs(x = paste0("PC1(",figure_five_pca_perc[1],")"), y = paste0("PC2(",figure_five_pca_perc[2],")"))
+
+figure_five_D <- ggplot(figure_five_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Patterning, shape = Patterning), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_2)) +
+  labs(x = paste0("PC1(",figure_five_pca_perc[1],")"), y = paste0("PC2(",figure_five_pca_perc[2],")"), fill = "Patterning", shape = "Patterning")
+
+figure_five_A / figure_five_B / figure_five_C / figure_five_D + plot_annotation(title = "Figure 5.) Principle Component Analysis of Samples  following Timepoint and ECM Filtering", tag_levels = "A", tag_prefix = "[", tag_suffix = "]")
+
+ggsave('figure_5_raw_ECMgenes_pca_timeaggregation.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=18, 
+       units = "in", 
+       scale = 1)
+```
+
+
+\pagebreak
+
+
+**Understanding how the data clusters when *neural ECM genes* are included Plotting PCA following aggregation by timepoint.**
+
+```{r, tidy=TRUE}
+
+figure_six <- data_x_m_f_neuralECM
+
+figure_six <- figure_six %>% 
+  mutate(Comp = paste(Patterning, Cell_Type, Day, Maturity, sep = "_"))
+
+figure_six <- figure_six %>% 
+  subset(select = c(Isoform, Mean_Expression, Comp))
+
+figure_six_spread <- figure_six %>% 
+  spread(Comp, Mean_Expression)
+
+figure_six_format <- data.frame(figure_six_spread[ ,-1], row.names=figure_six_spread[ ,1])
+
+figure_six_pca <- prcomp(t(figure_six_format))
+
+figure_six_pca_perc <-  round(100*figure_six_pca$sdev^2/sum(figure_six_pca$sdev^2),1)
+
+figure_six_pca_df <- data.frame(PC1 = figure_six_pca$x[ ,1], 
+                                    PC2 = figure_six_pca$x[ ,2], 
+                                    Sample = colnames(figure_six_format))
+
+figure_six_pca_df <- figure_six_pca_df %>% 
+  mutate(temp = figure_six_pca_df$Sample) %>% 
+  separate(temp, c("Patterning", "Cell_Type", "Day", "Maturity"), "_") %>% 
+  subset(select = c(PC1, PC2, Patterning, Cell_Type, Day, Maturity))
+
+figure_six_pca_df <- figure_six_pca_df %>% 
+  mutate(Cell_Type = fct_relevel(Cell_Type, "whole", "neuronal", "glial")) %>% 
+  mutate(Maturity = fct_relevel(Maturity, "early", "intermediate", "late"))
+```
+
+```{r, tidy=TRUE, fig.width=12, fig.height=18}
+
+figure_six_A <- ggplot(figure_six_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_six_pca_perc[1],")"), y = paste0("PC2(",figure_six_pca_perc[2],")"))
+
+figure_six_B <- ggplot(figure_six_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Cell_Type, shape = Cell_Type), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Patterning) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(vird_3)) +
+  labs(x = paste0("PC1(",figure_six_pca_perc[1],")"), y = paste0("PC2(",figure_six_pca_perc[2],")"), fill = "Cell Type", shape = "Cell Type")
+
+figure_six_C <- ggplot(figure_six_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Maturity), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_3)) +
+  labs(x = paste0("PC1(",figure_six_pca_perc[1],")"), y = paste0("PC2(",figure_six_pca_perc[2],")"))
+
+figure_six_D <- ggplot(figure_six_pca_df, aes(PC1, PC2)) + 
+  geom_point(aes(fill = Patterning, shape = Patterning), size = 5, color = "Black", pch = 21) + 
+  facet_grid(~Cell_Type) + 
+  theme_bw() +
+  theme(panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank()) + 
+  scale_fill_manual(values = rev(plasa_2)) +
+  labs(x = paste0("PC1(",figure_six_pca_perc[1],")"), y = paste0("PC2(",figure_six_pca_perc[2],")"), fill = "Patterning", shape = "Patterning")
+
+figure_six_A / figure_six_B / figure_six_C / figure_six_D + plot_annotation(title = "Figure 6.) Principle Component Analysis of Samples  following Timepoint and Neural ECM Filtering", tag_levels = "A", tag_prefix = "[", tag_suffix = "]")
+
+ggsave('figure_6_raw_neuralECMgenes_pca_timeaggregation.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=18, 
+       units = "in", 
+       scale = 1)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(figure_six, figure_six_A, figure_six_B, figure_six_C, figure_six_D, figure_six_format, figure_six_pca, figure_six_pca_df, figure_six_pca_perc, figure_six_spread, figure_five, figure_five_A, figure_five_B, figure_five_C, figure_five_D, figure_five_format, figure_five_pca, figure_five_pca_df, figure_five_pca_perc, figure_five_spread, figure_four, figure_four_A, figure_four_B, figure_four_C, figure_four_D, figure_four_format, figure_four_pca, figure_four_pca_df, figure_four_pca_perc, figure_four_spread, figure_three)
+
+rm(vird_3, plasa_2, plasa_3)
+```

@@ -1,0 +1,387 @@
+---
+title: \vspace{-1cm} Part7_Raw_Analysis_DESEQ_Fig7-13 \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/15/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Performing DESEQ Analysis #
+
+DESEQ is used to perform statistical comparisons of various groups.
+
+Input: **data_x_m_f_neuralECM_f_counts**, **data_x_m_f_neuralECM_metadata**
+
+Output: 
+
+Key: x (Trevino study), m (mean expression), f (timepoint filtered), neuralECM (neural ECM gene filtered), f (low expression filtered)
+
+**Set-up DESEQ design parameters**
+
+```{r, tidy=TRUE}
+
+design_celltype <- as.formula(~Cell_Type)
+design_maturity <- as.formula(~Maturity)
+design_patterning <- as.formula(~Patterning)
+```
+
+**DESEQ comparing cell types**
+
+```{r, tidy=TRUE}
+
+ddsobj_celltype <- DESeqDataSetFromMatrix(countData = round(data_x_m_f_neuralECM_f_counts),
+                              colData = data_x_m_f_neuralECM_metadata,
+                              design = design_celltype)
+
+dds_celltype <- DESeq(ddsobj_celltype)
+
+vsd_celltype <- varianceStabilizingTransformation(dds_celltype, blind=FALSE)
+head(assay(vsd_celltype), 3)
+```
+
+**Results neuronal vs glial comparisons**
+
+```{r, tidy=TRUE}
+
+res_celltype_ng <- results(dds_celltype, c("Cell_Type", "neuronal", "glial"))
+
+summary(res_celltype_ng)
+```
+
+**Plot normalized count for gene with the lowest p-value when comparing neuronal to glial (whole is shown)**
+
+```{r}
+
+plotCounts(dds_celltype, gene=which.min(res_celltype_ng$padj), intgroup="Cell_Type")
+```
+
+**Shrink log2 fold changes and create volcano plot**
+
+```{r, tidy=TRUE}
+
+res_celltype_ng_shr <- lfcShrink(dds_celltype, contrast = c('Cell_Type','neuronal','glial'), res=res_celltype_ng, type = 'normal')
+
+EnhancedVolcano(res_celltype_ng_shr,
+    lab = rownames(res_celltype_ng_shr),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    pCutoff = 10e-5,
+    FCcutoff = 1.5,
+    colAlpha = 0.5,
+    pointSize = 3.0,
+    labSize = 3.0,
+    labvjust = 0.01,
+    labhjust = -1,
+    title = "Figure 7.) Volcano Plot of Neural ECM Gene Expression",
+    subtitle = "Neuronal vs Glial Cells",
+    titleLabSize = 14,
+    subtitleLabSize = 12,
+    caption = bquote(~Log[2]~ "fold change cutoff, 1.5; p-value cutoff, 10e-5"),
+    captionLabSize = 10,
+    axisLabSize = 12,
+    legendPosition = "right",
+    legendLabSize = 10,
+    drawConnectors = TRUE,
+    widthConnectors = 0.5,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+    cutoffLineType = 'twodash',
+    cutoffLineWidth = 0.5,)
+
+ggsave('figure_7f_raw_neuralECMgenes_DESEQ_ng_volcano.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=6, 
+       units = "in", 
+       scale = 1)
+```
+
+**Create heatmaps of comparison**
+
+```{r, tidy=TRUE}
+
+color_palette <- colorRampPalette(c("#ffffff", "#deebf7","#9ecae1","#4292c6","#08519c"))(n = 50)
+
+ann_colors = list(Patterning = c(hCS = "#252525", hSS = "#d9d9d9"), 
+                  Maturity = c(early = "#d9d9d9", intermediate = "#969696", late = "#252525"),
+                  Cell_Type = c(whole = "#969696", neuronal = "#252525", glial = "#bdbdbd"))
+
+ng_topVarGenes <- head(order(rowVars(assay(dds_celltype)), decreasing = TRUE), 20)
+ng_mat  <- assay(dds_celltype)[ng_topVarGenes, ]
+ng_mat  <- ng_mat - rowMeans(ng_mat)
+ng_anno <- as.data.frame(colData(dds_celltype)[, c("Cell_Type","Maturity", "Patterning")])
+
+pheatmap(ng_mat,
+         annotation_col = ng_anno,
+         cluster_rows = FALSE, 
+         cluster_cols = TRUE, 
+         scale = 'none',
+         cutree_cols = 4,
+         treeheight_col = 15,
+         fontsize_row = 12,
+         fontsize_col = 16,
+         color = color_palette,
+         annotation_colors = ann_colors,
+         border_color = "NA",
+         show_colnames = TRUE,
+         angle_col = 90,
+         main = "Figure 8.) Heatmap of Neural ECM Gene Expression", 
+         width = 12, 
+         height = 12,
+         filename = str_c(directory, folder_fig_r, "/figure_8_raw_neuralECMgenes_DESEQ_ng_heatmap.pdf"))
+
+vsd_ng_topVarGenes <- head(order(rowVars(assay(vsd_celltype)), decreasing = TRUE), 20)
+vsd_ng_mat  <- assay(vsd_celltype)[vsd_ng_topVarGenes, ]
+vsd_ng_mat  <- vsd_ng_mat - rowMeans(vsd_ng_mat)
+vsd_ng_anno <- as.data.frame(colData(vsd_celltype)[, c("Cell_Type","Maturity", "Patterning")])
+
+pheatmap(vsd_ng_mat,
+         annotation_col = vsd_ng_anno,
+         cluster_rows = FALSE, 
+         cluster_cols = TRUE, 
+         scale = 'none',
+         cutree_cols = 4,
+         treeheight_col = 15,
+         fontsize_row = 12,
+         fontsize_col = 16,
+         color = color_palette,
+         annotation_colors = ann_colors,
+         border_color = "NA",
+         show_colnames = TRUE,
+         angle_col = 90,
+         main = "Figure 9.) Heatmap of VSD of Neural ECM Gene Expression", 
+         width = 12, 
+         height = 12,
+         filename = str_c(directory, folder_fig_r, "/figure_9_raw_neuralECMgenes_DESEQ_VSD_ng_heatmap.pdf"))
+```
+
+
+\pagebreak
+
+
+**DESEQ comparing maturity**
+
+```{r, tidy=TRUE}
+
+ddsobj_maturity <- DESeqDataSetFromMatrix(countData = round(data_x_m_f_neuralECM_f_counts),
+                              colData = data_x_m_f_neuralECM_metadata,
+                              design = design_maturity)
+
+dds_maturity <- DESeq(ddsobj_maturity)
+
+vsd_maturity <- varianceStabilizingTransformation(dds_maturity, blind=FALSE)
+head(assay(vsd_maturity), 3)
+```
+
+**Results neuronal vs glial comparisons**
+
+```{r, tidy=TRUE}
+
+res_mat_il <- results(dds_maturity, c("Maturity", "intermediate", "late"))
+
+summary(res_mat_il)
+```
+
+**Plot normalized count for gene with the lowest p-value when comparing neuronal to glial (whole is shown)**
+
+```{r}
+
+plotCounts(dds_maturity, gene=which.min(res_mat_il$padj), intgroup="Maturity")
+```
+
+**Shrink log2 fold changes and create volcano plot**
+
+```{r, tidy=TRUE}
+
+res_mat_il_shr <- lfcShrink(dds_maturity, contrast = c('Maturity','intermediate','late'), res=res_mat_il, type = 'normal')
+
+EnhancedVolcano(res_mat_il_shr,
+    lab = rownames(res_mat_il_shr),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    pCutoff = 10e-5,
+    FCcutoff = 1.5,
+    colAlpha = 0.5,
+    pointSize = 3.0,
+    labSize = 3.0,
+    labvjust = 0.01,
+    labhjust = -1,
+    title = "Figure 10.) Volcano Plot of Neural ECM Gene Expression",
+    subtitle = "Intermediate vs Late",
+    titleLabSize = 14,
+    subtitleLabSize = 12,
+    caption = bquote(~Log[2]~ "fold change cutoff, 1.5; p-value cutoff, 10e-5"),
+    captionLabSize = 10,
+    axisLabSize = 12,
+    legendPosition = "right",
+    legendLabSize = 10,
+    drawConnectors = TRUE,
+    widthConnectors = 0.5,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+    cutoffLineType = 'twodash',
+    cutoffLineWidth = 0.5,)
+
+ggsave('figure_10_raw_neuralECMgenes_DESEQ_il_volcano.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=6, 
+       units = "in", 
+       scale = 1)
+```
+
+**Create heatmap of comparison**
+
+```{r}
+vsd_mat_topVarGenes <- head(order(rowVars(assay(vsd_maturity)), decreasing = TRUE), 20)
+vsd_mat_mat  <- assay(vsd_maturity)[vsd_mat_topVarGenes, ]
+vsd_mat_mat  <- vsd_mat_mat - rowMeans(vsd_mat_mat)
+vsd_mat_anno <- as.data.frame(colData(vsd_maturity)[, c("Cell_Type","Maturity", "Patterning")])
+
+pheatmap(vsd_mat_mat,
+         annotation_col = vsd_mat_anno,
+         cluster_rows = FALSE, 
+         cluster_cols = TRUE, 
+         scale = 'none',
+         cutree_cols = 4,
+         treeheight_col = 15,
+         fontsize_row = 12,
+         fontsize_col = 16,
+         color = color_palette,
+         annotation_colors = ann_colors,
+         border_color = "NA",
+         show_colnames = TRUE,
+         angle_col = 90,
+         main = "Figure 11.) Heatmap of VSD of Neural ECM Gene Expression", 
+         width = 12, 
+         height = 12,
+         filename = str_c(directory, folder_fig_r, "/figure_11_raw_neuralECMgenes_DESEQ_VSD_mat_heatmap.pdf"))
+```
+
+
+\pagebreak
+
+
+**DESEQ comparing patterning**
+
+```{r, tidy=TRUE}
+
+ddsobj_patterning <- DESeqDataSetFromMatrix(countData = round(data_x_m_f_neuralECM_f_counts),
+                              colData = data_x_m_f_neuralECM_metadata,
+                              design = design_patterning)
+
+dds_patterning <- DESeq(ddsobj_patterning)
+
+vsd_patterning <- varianceStabilizingTransformation(dds_patterning, blind=FALSE)
+head(assay(vsd_patterning), 3)
+```
+
+**Results hCS vs hSS comparisons**
+
+```{r, tidy=TRUE}
+
+res_patterning <- results(dds_patterning, c("Patterning", "hCS", "hSS"))
+
+summary(res_patterning)
+```
+
+**Plot normalized count for gene with the lowest p-value when comparing neuronal to glial (whole is shown)**
+
+```{r}
+
+plotCounts(dds_patterning, gene=which.min(res_patterning$padj), intgroup="Patterning")
+```
+
+**Shrink log2 fold changes and create volcano plot**
+
+```{r, tidy=TRUE}
+
+res_patterning_shr <- lfcShrink(dds_patterning, contrast = c('Patterning','hCS','hSS'), res=res_patterning, type = 'normal')
+
+EnhancedVolcano(res_patterning_shr,
+    lab = rownames(res_patterning_shr),
+    x = 'log2FoldChange',
+    y = 'pvalue',
+    pCutoff = 10e-5,
+    FCcutoff = 1.5,
+    colAlpha = 0.5,
+    pointSize = 3.0,
+    labSize = 3.0,
+    labvjust = 0.01,
+    labhjust = -1,
+    title = "Figure 12.) Volcano Plot of Neural ECM Gene Expression",
+    subtitle = "hCS vs hSS",
+    titleLabSize = 14,
+    subtitleLabSize = 12,
+    caption = bquote(~Log[2]~ "fold change cutoff, 1.5; p-value cutoff, 10e-5"),
+    captionLabSize = 10,
+    axisLabSize = 12,
+    legendPosition = "right",
+    legendLabSize = 10,
+    drawConnectors = TRUE,
+    widthConnectors = 0.5,
+    gridlines.major = FALSE,
+    gridlines.minor = FALSE,
+    cutoffLineType = 'twodash',
+    cutoffLineWidth = 0.5,)
+
+ggsave('figure_12_raw_neuralECMgenes_DESEQ_pat_volcano.pdf', 
+       device = "pdf", 
+       path = str_c(directory, folder_fig_r), 
+       width=12, 
+       height=6, 
+       units = "in", 
+       scale = 1)
+```
+
+**Create heatmap of comparison**
+
+```{r}
+vsd_pat_topVarGenes <- head(order(rowVars(assay(vsd_patterning)), decreasing = TRUE), 20)
+vsd_pat_mat  <- assay(vsd_patterning)[vsd_pat_topVarGenes, ]
+vsd_pat_mat  <- vsd_pat_mat - rowMeans(vsd_pat_mat)
+vsd_pat_anno <- as.data.frame(colData(vsd_patterning)[, c("Cell_Type","Maturity", "Patterning")])
+
+pheatmap(vsd_pat_mat,
+         annotation_col = vsd_pat_anno,
+         cluster_rows = FALSE, 
+         cluster_cols = TRUE, 
+         scale = 'none',
+         cutree_cols = 4,
+         treeheight_col = 15,
+         fontsize_row = 12,
+         fontsize_col = 16,
+         color = color_palette,
+         annotation_colors = ann_colors,
+         border_color = "NA",
+         show_colnames = TRUE,
+         angle_col = 90,
+         main = "Figure 13.) Heatmap of VSD of Neural ECM Gene Expression", 
+         width = 12, 
+         height = 12,
+         filename = str_c(directory, folder_fig_r, "/figure_13_raw_neuralECMgenes_DESEQ_VSD_pat_heatmap.pdf"))
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Export the variables which are requried for downstream steps.**
+
+```{r, tidy=TRUE}
+
+write.csv(as.data.frame(res_celltype_ng), str_c(directory, variables, "data_x_m_f_neuralECM_f_DESEQ_ng.csv"))
+write.csv(as.data.frame(res_mat_il), str_c(directory, variables, "data_x_m_f_neuralECM_f_DESEQ_il.csv"))
+write.csv(as.data.frame(res_patterning), str_c(directory, variables, "data_x_m_f_neuralECM_f_DESEQ_pat.csv"))
+```
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(ann_colors, color_palette, design_celltype, design_maturity, design_patterning, ng_topVarGenes, ng_mat, ng_anno, res_celltype_ng_shr, res_mat_il_shr, res_patterning_shr, vsd_mat_anno, vsd_mat_mat, vsd_ng_anno, vsd_ng_mat, vsd_pat_anno, vsd_pat_mat)
+```

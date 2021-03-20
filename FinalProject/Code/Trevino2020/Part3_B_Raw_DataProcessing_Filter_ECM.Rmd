@@ -1,0 +1,206 @@
+---
+title: \vspace{-1cm} Part3_B_Raw_DataProcessing_Filter_ECM \vspace{-0.20cm}
+author: "Julien G. Roth"
+date: "3/14/2021"
+geometry: "left=2cm,right=2cm,top=2cm,bottom=2cm"
+output: pdf_document
+---
+
+# Filtering for ECM Genes of Interest #
+
+**The following script will output four dataframes which are subsets of the original processed dataframe. The 1st/2nd dataframe has been subset according to the 'Matrisome' list of ECM genes published by Nada and Hayes while the 3rd/4th dataframe has been subset by a list of neural ECM genes identified by JGR.**
+
+The input are the dataframes: **data_x_m', 'data_x_m_f' (time-filtered).**
+
+The output are the dataframes: **'data_x_m_ECM', 'data_x_m_f_ECM', 'data_x_m_neuralECM', 'data_x_m_f_neuralECM'.**
+
+**Loading all ECM genes**
+
+```{r, tidy=TRUE}
+
+folder_ECM <- "ECMGeneIDs/"
+
+mc_collagen <- read.table(str_c(directory, folder_ECM, "matrisome_core_collagen.txt"), quote="\"", comment.char="")
+mc_collagen <- mutate(mc_collagen, rep("Collagen", nrow(mc_collagen)))
+colnames(mc_collagen) <- c("Symbol", "Gene_Category")
+
+mc_glycoproteins <- read.table(str_c(directory, folder_ECM, "matrisome_core_glycoproteins.txt"), quote="\"", comment.char="")
+mc_glycoproteins <- mutate(mc_glycoproteins, rep("Glycoprotein", nrow(mc_glycoproteins)))
+colnames(mc_glycoproteins) <- c("Symbol", "Gene_Category")
+
+mc_proteoglycans_hyaluronan <- read.table(str_c(directory, folder_ECM, "matrisome_core_proteoglycans-hyaluronan.txt"),  quote="\"", comment.char="")
+mc_proteoglycans_hyaluronan <- mutate(mc_proteoglycans_hyaluronan, rep("ProteoglycanHA", nrow(mc_proteoglycans_hyaluronan)))
+colnames(mc_proteoglycans_hyaluronan) <- c("Symbol", "Gene_Category")
+
+ma_affiliated <- read.table(str_c(directory, folder_ECM, "matrisome_associated_ecmaffiliatedproteins.txt"),  quote="\"", comment.char="")
+ma_affiliated <- mutate(ma_affiliated, rep("ECMAffiliatedProtein", nrow(ma_affiliated)))
+colnames(ma_affiliated) <- c("Symbol", "Gene_Category")
+
+ma_regulators <- read.table(str_c(directory, folder_ECM, "matrisome_associated_regulators.txt"),  quote="\"", comment.char="")
+ma_regulators <- mutate(ma_regulators, rep("Regulator", nrow(ma_regulators)))
+colnames(ma_regulators) <- c("Symbol", "Gene_Category")
+
+ma_integrins <- read.table(str_c(directory, folder_ECM, "matrisome_associated_integrins.txt"),  quote="\"", comment.char="")
+ma_integrins <- mutate(ma_integrins, rep("Integrin", nrow(ma_integrins)))
+colnames(ma_integrins) <- c("Symbol", "Gene_Category")
+
+ma_secreted <- read.table(str_c(directory, folder_ECM, "matrisome_associated_secretedfactors.txt"),  quote="\"", comment.char="")
+ma_secreted <- mutate(ma_secreted, rep("SecretedFactor", nrow(ma_secreted)))
+colnames(ma_secreted) <- c("Symbol", "Gene_Category")
+
+ECM <- rbind(mc_collagen, mc_glycoproteins, mc_proteoglycans_hyaluronan, ma_affiliated, ma_regulators, ma_integrins, ma_secreted)
+
+nrow(ECM)
+```
+
+**Loading the neural ECM genes**
+
+```{r, tidy=TRUE}
+
+collagen <- read.table(str_c(directory, folder_ECM, "Collagen.txt"), quote="\"", comment.char="")
+collagen <- mutate(collagen, rep("Collagen", nrow(collagen)))
+colnames(collagen) <- c("Symbol", "Gene_Category")
+
+enzyme <- read.table(str_c(directory, folder_ECM, "Enzyme.txt"), quote="\"", comment.char="")
+enzyme <- mutate(enzyme, rep("Enzyme", nrow(enzyme)))
+colnames(enzyme) <- c("Symbol", "Gene_Category")
+
+fibronectin <- read.table(str_c(directory, folder_ECM, "Fibronectin.txt"), quote="\"", comment.char="")
+fibronectin <- mutate(fibronectin, rep("Fibronectin", nrow(fibronectin)))
+colnames(fibronectin) <- c("Symbol", "Gene_Category")
+
+hyaluronicacid <- read.table(str_c(directory, folder_ECM, "HyaluronicAcid.txt"), quote="\"", comment.char="")
+hyaluronicacid <- mutate(hyaluronicacid, rep("Hyaluronic Acid", nrow(hyaluronicacid)))
+colnames(hyaluronicacid) <- c("Symbol", "Gene_Category")
+
+integrin <- read.table(str_c(directory, folder_ECM, "Integrin.txt"),  quote="\"", comment.char="")
+integrin <- mutate(integrin, rep("Integrin", nrow(integrin)))
+colnames(integrin) <- c("Symbol", "Gene_Category")
+
+laminin <- read.table(str_c(directory, folder_ECM, "Laminin.txt"),  quote="\"", comment.char="")
+laminin <- mutate(laminin, rep("Laminin", nrow(laminin)))
+colnames(laminin) <- c("Symbol", "Gene_Category")
+
+linkprotein <- read.table(str_c(directory, folder_ECM, "LinkProteins.txt"),  quote="\"", comment.char="")
+linkprotein <- mutate(linkprotein, rep("Link Protein", nrow(linkprotein)))
+colnames(linkprotein) <- c("Symbol", "Gene_Category")
+
+neuronalpentraxin <- read.table(str_c(directory, folder_ECM, "NeuronalPentraxin.txt"),  quote="\"", comment.char="")
+neuronalpentraxin <- mutate(neuronalpentraxin, rep("Neuronal Pentraxin", nrow(neuronalpentraxin)))
+colnames(neuronalpentraxin) <- c("Symbol", "Gene_Category")
+
+proteoglycan <- read.table(str_c(directory, folder_ECM, "Proteoglycan.txt"),  quote="\"", comment.char="")
+proteoglycan <- mutate(proteoglycan, rep("Proteoglycan", nrow(proteoglycan)))
+colnames(proteoglycan) <- c("Symbol", "Gene_Category")
+
+reelin <- read.table(str_c(directory, folder_ECM, "Reelin.txt"),  quote="\"", comment.char="")
+reelin <- mutate(reelin, rep("Reelin", nrow(reelin)))
+colnames(reelin) <- c("Symbol", "Gene_Category")
+
+tenascin <- read.table(str_c(directory, folder_ECM, "Tenascin.txt"),  quote="\"", comment.char="")
+tenascin <- mutate(tenascin, rep("Tenascin", nrow(tenascin)))
+colnames(tenascin) <- c("Symbol", "Gene_Category")
+
+thrombospondin <- read.table(str_c(directory, folder_ECM, "Thrombospondin.txt"),  quote="\"", comment.char="")
+thrombospondin <- mutate(thrombospondin, rep("Thrombospondin", nrow(thrombospondin)))
+colnames(thrombospondin) <- c("Symbol", "Gene_Category")
+
+neuralECM <- rbind(collagen, enzyme, fibronectin, hyaluronicacid, integrin, laminin, linkprotein, neuronalpentraxin, proteoglycan, reelin, tenascin, thrombospondin)
+
+nrow(neuralECM)
+```
+
+
+\pagebreak
+
+
+**Filtering data based on all ECM genes**
+
+```{r, tidy=TRUE}
+
+data_x_m_ECM_merge <- data.frame(data_x_m[data_x_m$Symbol %in% ECM$Symbol, ])
+data_x_m_ECM_categories <- data.frame(ECM[data_x_m_ECM_merge$Symbol %in% ECM$Symbol, ])
+
+data_x_m_ECM_label <- merge.data.frame(data_x_m_ECM_merge, data_x_m_ECM_categories, by = "Symbol")
+data_x_m_ECM_label$Full_Gene <- paste(data_x_m_ECM_label$Gene_Category, data_x_m_ECM_label$Isoform, sep = "-")
+
+data_x_m_ECM <- data_x_m_ECM_label
+
+data_x_m_ECM <- data_x_m_ECM[ , c(2, 3, 4, 1, 5, 6, 7, 8, 9)]
+
+head(data_x_m_ECM, 5)
+```
+
+**Filtering time-subset data based on all ECM genes**
+
+```{r, tidy=TRUE}
+
+data_x_m_f_ECM_merge <- data.frame(data_x_m_f[data_x_m_f$Symbol %in% ECM$Symbol, ])
+data_x_m_f_ECM_categories <- data.frame(ECM[data_x_m_f_ECM_merge$Symbol %in% ECM$Symbol, ])
+
+data_x_m_f_ECM_label <- merge.data.frame(data_x_m_f_ECM_merge, data_x_m_f_ECM_categories, by = "Symbol")
+data_x_m_f_ECM_label$Full_Gene <- paste(data_x_m_f_ECM_label$Gene_Category, data_x_m_f_ECM_label$Isoform, sep = "-")
+
+data_x_m_f_ECM <- data_x_m_f_ECM_label
+
+data_x_m_f_ECM <- data_x_m_f_ECM[ , c(2, 3, 4, 8, 9, 1, 5, 6, 7, 10, 11)]
+
+head(data_x_m_f_ECM, 5)
+```
+
+**Filtering data based on neural ECM genes**
+
+```{r, tidy=TRUE}
+
+data_x_m_neuralECM_merge <- data.frame(data_x_m[data_x_m$Symbol %in% neuralECM$Symbol, ])
+data_x_m_neuralECM_categories <- data.frame(neuralECM[data_x_m_neuralECM_merge$Symbol %in% neuralECM$Symbol, ])
+
+data_x_m_neuralECM_label <- merge.data.frame(data_x_m_neuralECM_merge, data_x_m_neuralECM_categories, by = "Symbol")
+data_x_m_neuralECM_label$Full_Gene <- paste(data_x_m_neuralECM_label$Gene_Category, data_x_m_neuralECM_label$Isoform, sep = "-")
+
+data_x_m_neuralECM <- data_x_m_neuralECM_label
+
+data_x_m_neuralECM <- data_x_m_neuralECM[ , c(2, 3, 4, 1, 5, 6, 7, 8, 9)]
+
+head(data_x_m_neuralECM, 5)
+```
+
+**Filtering time-subset data based on neural ECM genes**
+
+```{r, tidy=TRUE}
+
+data_x_m_f_neuralECM_merge <- data.frame(data_x_m_f[data_x_m_f$Symbol %in% neuralECM$Symbol, ])
+data_x_m_f_neuralECM_categories <- data.frame(neuralECM[data_x_m_f_neuralECM_merge$Symbol %in% neuralECM$Symbol, ])
+
+data_x_m_f_neuralECM_label <- merge.data.frame(data_x_m_f_neuralECM_merge, data_x_m_f_neuralECM_categories, by = "Symbol")
+data_x_m_f_neuralECM_label$Full_Gene <- paste(data_x_m_f_neuralECM_label$Gene_Category, data_x_m_f_neuralECM_label$Isoform, sep = "-")
+
+data_x_m_f_neuralECM <- data_x_m_f_neuralECM_label
+
+data_x_m_f_neuralECM <- data_x_m_f_neuralECM[ , c(2, 3, 4, 8, 9, 1, 5, 6, 7, 10, 11)]
+
+head(data_x_m_f_neuralECM, 5)
+```
+
+
+\pagebreak
+
+
+# Cleaning Data #
+
+**Export the variables which are requried for downstream steps.**
+
+```{r, tidy=TRUE}
+
+write.table(data_x_m_ECM, str_c(directory, variables, "data_x_m_ECM.csv"), sep = ',', row.names = FALSE)
+write.table(data_x_m_f_ECM, str_c(directory, variables, "data_x_m_f_ECM.csv"), sep = ',', row.names = FALSE)
+write.table(data_x_m_neuralECM, str_c(directory, variables, "data_x_m_neuralECM.csv"), sep = ',', row.names = FALSE)
+write.table(data_x_m_f_neuralECM, str_c(directory, variables, "data_x_m_f_neuralECM.csv"), sep = ',', row.names = FALSE)
+```
+
+**Remove less relevant or temporary variables to decrease clutter.**
+
+```{r, tidy=TRUE}
+
+rm(collagen, data_x_m_ECM_categories, data_x_m_ECM_label, data_x_m_ECM_merge, data_x_m_f_ECM_categories, data_x_m_f_ECM_label, data_x_m_f_ECM_merge, data_x_m_f_neuralECM_categories, data_x_m_f_neuralECM_label, data_x_m_f_neuralECM_merge, data_x_m_neuralECM_categories, data_x_m_neuralECM_merge, data_x_m_neuralECM_label, enzyme, fibronectin, hyaluronicacid, integrin, laminin, linkprotein, ma_affiliated, ma_regulators, ma_secreted, mc_collagen, mc_proteoglycans_hyaluronan, mc_glycoproteins, ma_integrins, neuronalpentraxin, proteoglycan, reelin, tenascin, thrombospondin)
+```
